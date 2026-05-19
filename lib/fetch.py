@@ -212,6 +212,17 @@ def _scrape_icpc(source: dict) -> list[dict]:
 
         url = urljoin(source["url"], href)
 
+        # Filter out Cloudflare email-obfuscation entries: some list_Book
+        # cards on ICPC only contain a "[email protected]" contact, not a
+        # real publication link.
+        if (
+            "@" in title
+            or title.lower() == "[email protected]"
+            or len(title) < 8
+            or "/cdn-cgi/l/email-protection" in urlparse(url).path
+        ):
+            continue
+
         # Summary: walk the div's direct children, skipping the title <a>,
         # the <small> file-type/size marker, and any nested list_* divs.
         parts: list[str] = []
