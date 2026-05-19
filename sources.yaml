@@ -1,0 +1,324 @@
+# =============================================================================
+# Navictus News-Watch — sources.yaml
+# =============================================================================
+# This file is the brain of the system. Each entry tells the fetcher where to
+# look and how to interpret what it finds. Tune the tiers, add/remove sources,
+# and adjust topic tags as Navictus's positioning evolves.
+#
+# Schema:
+#   name:           Human-readable label (shows in the digest)
+#   type:           "rss" | "scrape" | "manual_check"
+#                   - rss:          feedparser handles it directly
+#                   - scrape:       custom scraper in lib/fetch.py
+#                   - manual_check: surfaced as a reminder in the digest;
+#                                   no automated fetch (LinkedIn, paywalled sites)
+#   url:            The feed URL (rss) or the page URL (scrape/manual_check)
+#   tier:           1 = must-read, 2 = high-value, 3 = noisier but worth scanning
+#   tags:           Topical tags — used to bias the relevance filter
+#   category_hint:  "sourced_post_candidate" | "news_repost_candidate" | "either"
+#                   - sourced_post_candidate: think tanks, NATO, EU, ICPC etc.
+#                     These produce PDF reports good for sourced LinkedIn posts.
+#                   - news_repost_candidate: news outlets — articles you'd repost
+#                     with thoughts.
+#                   - either: depends on the specific item.
+# =============================================================================
+
+
+# =============================================================================
+# TIER 1 — Core defense & naval news outlets (news_repost candidates)
+# =============================================================================
+# These are the day-to-day news engines. High volume, but USV / naval autonomy
+# / port protection items land here first. Mostly RSS; all reputable.
+
+- name: Naval News
+  type: rss
+  url: https://www.navalnews.com/feed/
+  tier: 1
+  tags: [naval, usv, autonomy, defense, navy, technology]
+  category_hint: news_repost_candidate
+  notes: >
+    The single most important source. Heavy USV / unmanned coverage.
+    Headline-driven, often cross-posts to LinkedIn.
+
+- name: USNI News
+  type: rss
+  url: https://news.usni.org/feed
+  tier: 1
+  tags: [naval, navy, maritime_policy, usv, autonomy, defense]
+  category_hint: news_repost_candidate
+  notes: >
+    US Naval Institute. Strong on USN procurement, doctrine, and
+    Congressional Research Service summaries (those often have citable PDFs).
+
+- name: Shephard Media — Naval
+  type: scrape
+  url: https://www.shephardmedia.com/news/
+  tier: 1
+  tags: [naval, usv, autonomy, defense, procurement]
+  category_hint: news_repost_candidate
+  notes: >
+    Strong on USV-specific deep dives. Confirmed in May 2026 they cover
+    MARTAC, Saildrone, etc. No clean RSS; needs a small scraper.
+
+- name: Defense News — Naval & Unmanned
+  type: rss
+  url: https://www.defensenews.com/arc/outboundfeeds/rss/category/naval/?outputType=xml
+  tier: 1
+  tags: [naval, navy, unmanned, defense, procurement, congress]
+  category_hint: news_repost_candidate
+  notes: >
+    Naval section RSS. Sister feed for /unmanned/ also worth adding if it
+    fires cleanly during testing.
+
+- name: Breaking Defense
+  type: rss
+  url: https://breakingdefense.com/feed/
+  tier: 1
+  tags: [defense, procurement, policy, technology, autonomy]
+  category_hint: news_repost_candidate
+  notes: >
+    Higher signal-to-noise than most. Filter for naval/USV-tagged items.
+
+
+# =============================================================================
+# TIER 2 — Maritime industry & port/shipping outlets
+# =============================================================================
+# Bridge between "defense" and Navictus's dual-use story. Port protection,
+# offshore, asset escort use cases live here.
+
+- name: Maritime Executive
+  type: rss
+  url: https://www.maritime-executive.com/articles.rss
+  tier: 2
+  tags: [maritime, shipping, ports, offshore, security]
+  category_hint: news_repost_candidate
+
+- name: gCaptain
+  type: rss
+  url: https://gcaptain.com/feed/
+  tier: 2
+  tags: [maritime, shipping, ports, offshore, accidents]
+  category_hint: news_repost_candidate
+
+- name: Splash247
+  type: rss
+  url: https://splash247.com/feed/
+  tier: 2
+  tags: [maritime, shipping, ports, offshore]
+  category_hint: news_repost_candidate
+
+- name: Naval Today
+  type: rss
+  url: https://www.navaltoday.com/feed/
+  tier: 2
+  tags: [naval, maritime, shipping, vessels]
+  category_hint: news_repost_candidate
+
+- name: Marine Link
+  type: rss
+  url: https://www.marinelink.com/rss/maritime-news.xml
+  tier: 2
+  tags: [maritime, shipping, offshore, technology]
+  category_hint: news_repost_candidate
+
+- name: Offshore Energy
+  type: rss
+  url: https://www.offshore-energy.biz/feed/
+  tier: 2
+  tags: [offshore, energy, wind, oil_gas, maritime]
+  category_hint: news_repost_candidate
+  notes: >
+    For the offshore-energy escort/protection use case. Lower hit rate
+    but the hits are valuable for that specific Navictus angle.
+
+
+# =============================================================================
+# TIER 1 — Institutions & think tanks (sourced_post candidates — PDF gold)
+# =============================================================================
+# These are the citable-source factories. Lower volume, much higher
+# per-item value. PDFs from here are exactly what the existing sourced-post
+# skill is designed around.
+
+- name: NATO MARCOM (Allied Maritime Command)
+  type: scrape
+  url: https://mc.nato.int/media-centre/news/
+  tier: 1
+  tags: [nato, maritime, exercises, doctrine, usv]
+  category_hint: sourced_post_candidate
+  notes: >
+    REPMUS, Dynamic Messenger, undersea infrastructure — directly relevant
+    to Navictus's near-term milestones. No RSS, scrape required.
+
+- name: NATO ACT (Allied Command Transformation)
+  type: scrape
+  url: https://www.act.nato.int/articles/
+  tier: 1
+  tags: [nato, innovation, doctrine, autonomy, technology]
+  category_hint: sourced_post_candidate
+  notes: >
+    Innovation Challenges, warfare development. Often publishes citable PDFs.
+
+- name: European Defence Agency (EDA)
+  type: scrape
+  url: https://eda.europa.eu/news-and-events/news
+  tier: 1
+  tags: [eu, defense, maritime, eumss, procurement, marsur]
+  category_hint: sourced_post_candidate
+  notes: >
+    European Combat Vessel, MARSUR, CARD reports. Very high signal for the
+    EU dual-use positioning.
+
+- name: EEAS — Maritime Security
+  type: scrape
+  url: https://www.eeas.europa.eu/eeas/maritime-security_en
+  tier: 1
+  tags: [eu, maritime_security, eumss, csdp, atalanta]
+  category_hint: sourced_post_candidate
+  notes: >
+    EU Maritime Security Strategy updates. Action plan revisions are
+    cite-gold for LinkedIn posts.
+
+- name: CSIS — Maritime & International Security
+  type: scrape
+  url: https://www.csis.org/topics/maritime-issues-and-oceans
+  tier: 1
+  tags: [maritime, security, geopolitics, undersea, mda]
+  category_hint: sourced_post_candidate
+  notes: >
+    Contested Seas, MDA research. CSIS publishes substantive PDFs regularly.
+
+- name: Atlantic Council — Maritime Security
+  type: scrape
+  url: https://www.atlanticcouncil.org/issue/maritime-security/
+  tier: 1
+  tags: [maritime, security, transatlantic, undersea, ports]
+  category_hint: sourced_post_candidate
+
+- name: RUSI — International Security
+  type: rss
+  url: https://www.rusi.org/explore-our-research/publications/rss
+  tier: 1
+  tags: [defense, security, autonomy, naval, undersea]
+  category_hint: sourced_post_candidate
+  notes: >
+    Verify exact RSS URL on first run; RUSI's feed structure has changed
+    before. Strong on Atlantic Bastion / autonomous ASW concepts.
+
+- name: IISS — Military Balance & Analysis
+  type: scrape
+  url: https://www.iiss.org/online-analysis/
+  tier: 2
+  tags: [defense, balance, procurement, geopolitics]
+  category_hint: sourced_post_candidate
+
+
+# =============================================================================
+# TIER 2 — Specialist / niche
+# =============================================================================
+
+- name: ICPC (International Cable Protection Committee)
+  type: scrape
+  url: https://www.iscpc.org/publications/
+  tier: 2
+  tags: [undersea_cables, infrastructure, security]
+  category_hint: sourced_post_candidate
+  notes: >
+    The authoritative source for undersea cable threat data. Lower
+    publishing frequency but every PDF is cite-worthy.
+
+- name: UNCTAD — Review of Maritime Transport
+  type: scrape
+  url: https://unctad.org/topic/transport-and-trade-logistics/review-of-maritime-transport
+  tier: 2
+  tags: [shipping, ports, trade, economics]
+  category_hint: sourced_post_candidate
+  notes: >
+    Annual flagship report. Useful for the $20B port protection / $40B
+    coastal surveillance market context.
+
+- name: Defence Industry Europe
+  type: rss
+  url: https://defence-industry.eu/feed/
+  tier: 2
+  tags: [eu, defense, industry, procurement, naval]
+  category_hint: news_repost_candidate
+  notes: >
+    Reposts EDA / NATO press releases quickly. Often easier to read than
+    the originals.
+
+- name: Janes — Defense & Naval (free content)
+  type: scrape
+  url: https://www.janes.com/osint-insights/defence-news
+  tier: 2
+  tags: [defense, naval, intelligence, procurement]
+  category_hint: news_repost_candidate
+  notes: >
+    Most Janes content is paywalled but the OSINT feed has free items.
+
+
+# =============================================================================
+# TIER 2 — Portugal-specific
+# =============================================================================
+# Local credibility matters for Navictus. Naval-REX, Marinha Portuguesa
+# news, and Portuguese defense-industry coverage all live here.
+
+- name: Marinha Portuguesa — Notícias
+  type: scrape
+  url: https://www.marinha.pt/pt/Media-Centro-de-Noticias/noticias
+  tier: 2
+  tags: [portugal, navy, exercises, repmus]
+  category_hint: news_repost_candidate
+  notes: >
+    Critical for REPMUS / Naval-REX coverage. Scrape required.
+
+- name: Diário de Notícias — Defesa
+  type: scrape
+  url: https://www.dn.pt/tag/defesa.html
+  tier: 3
+  tags: [portugal, defense, politics]
+  category_hint: news_repost_candidate
+  notes: >
+    Optional. Mostly general; the defense tag occasionally has gems.
+
+- name: Observador — Defesa
+  type: scrape
+  url: https://observador.pt/seccao/sociedade/defesa/
+  tier: 3
+  tags: [portugal, defense, politics]
+  category_hint: news_repost_candidate
+
+
+# =============================================================================
+# MANUAL CHECK — LinkedIn & paywalled
+# =============================================================================
+# These can't be reliably automated. The digest will surface a reminder
+# 1x/week to do a manual scan of these specific feeds/accounts.
+
+- name: LinkedIn — Naval News company page
+  type: manual_check
+  url: https://www.linkedin.com/company/naval-news/
+  tier: 2
+  tags: [linkedin, naval, usv]
+  category_hint: news_repost_candidate
+  notes: >
+    Reminder only. The agent can't scrape LinkedIn safely. Once a week
+    the digest will nudge you to check this manually.
+
+- name: LinkedIn — USVs & autonomy thought leaders
+  type: manual_check
+  url: "https://www.linkedin.com/search/results/content/?keywords=USV%20autonomous%20surface%20vessel"
+  tier: 2
+  tags: [linkedin, usv, autonomy]
+  category_hint: news_repost_candidate
+  notes: >
+    Saved search reminder. Pin the people whose posts you'd want to
+    repost; the agent will only nudge.
+
+- name: Lloyd's List
+  type: manual_check
+  url: https://www.lloydslist.com/
+  tier: 3
+  tags: [shipping, maritime, paywalled]
+  category_hint: news_repost_candidate
+  notes: >
+    Paywalled. Manual reminder; the agent can't read full articles.
