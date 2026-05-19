@@ -316,6 +316,85 @@ def _scrape_eeas(source: dict) -> list[dict]:
     return items
 
 
+@register_scraper("Atlantic Council — Maritime Security")
+def _scrape_atlantic_council(source: dict) -> list[dict]:
+    """
+    Atlantic Council maritime-security topic page. Items are rendered as
+    <section class="gta-embed gta-post-embed gutenblock"> cards. Each
+    card exposes a category, optional author, date, title, and excerpt.
+    Summary combines the category/author prefix with the excerpt so the
+    relevance filter can tell a substantive report apart from a media
+    mention without needing extra schema fields.
+    """
+    try:
+        with _http_client() as client:
+            resp = client.get(source["url"])
+            resp.raise_for_status()
+    except Exception as e:
+        print(f"[WARN] Failed to fetch {source['name']}: {e}")
+        return []
+
+    soup = BeautifulSoup(resp.text, "lxml")
+    items: list[dict] = []
+
+    for section in soup.select("section.gta-post-embed"):
+        link = section.select_one("a.gta-post-embed--link")
+        href = link.get("href") if link else None
+        if not href:
+            continue
+
+        title_el = section.select_one("h4.gta-post-embed--title")
+        title = title_el.get_text(strip=True) if title_el else ""
+        if not title:
+            continue
+
+        url = urljoin(source["url"], href)
+
+        category_el = section.select_one("span.gta-embed--tax--cats")
+        category = category_el.get_text(strip=True) if category_el else ""
+
+        author_el = section.select_one("span.gta-embed--tax--expert")
+        author = author_el.get_text(strip=True) if author_el else ""
+
+        excerpt_el = section.select_one("p.gta-post-embed--excerpt")
+        excerpt = excerpt_el.get_text(strip=True) if excerpt_el else ""
+
+        parts: list[str] = []
+        if category:
+            parts.append(f"[{category}]")
+        if author:
+            parts.append(f"By {author}.")
+        if excerpt:
+            parts.append(excerpt)
+        summary = " ".join(parts)
+
+        date_el = section.select_one("span.gta-post-embed--heading--date")
+        published: str | None = None
+        if date_el:
+            try:
+                published = datetime.strptime(
+                    date_el.get_text(strip=True), "%B %d, %Y"
+                ).replace(tzinfo=timezone.utc).isoformat()
+            except ValueError:
+                published = None
+
+        item: dict = {
+            "url": url,
+            "title": title,
+            "summary": summary,
+            "published": published,
+            "source": source["name"],
+            "source_type": source["type"],
+            "tags": list(source.get("tags") or []),
+            "category_hint": source.get("category_hint", ""),
+        }
+        if urlparse(url).path.lower().endswith(".pdf"):
+            item["pdf_url"] = url
+        items.append(item)
+
+    return items
+
+
 # ----------------------------------------------------------------------------
 # Public entry point
 # ----------------------------------------------------------------------------
