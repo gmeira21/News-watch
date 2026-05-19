@@ -9,6 +9,7 @@ Failures in any single source are logged as warnings — fetch_all
 always returns a list, never raises.
 """
 
+import re
 from datetime import date, datetime, timezone
 from typing import Any, Callable
 from urllib.parse import urljoin
@@ -16,7 +17,7 @@ from urllib.parse import urljoin
 import feedparser
 import httpx
 import yaml
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString, Tag
 
 USER_AGENT = "NavictusNewsWatch/0.1 (+https://github.com/gmeira21/News-watch)"
 HTTP_TIMEOUT = 15.0
@@ -161,6 +162,88 @@ def _scrape_marinha_pt(source: dict) -> list[dict]:
             "tags": list(source.get("tags") or []),
             "category_hint": source.get("category_hint", ""),
         })
+    return items
+
+
+def _icpc_is_list_div(tag: Any) -> bool:
+    if not isinstance(tag, Tag) or tag.name != "div":
+        return False
+    classes = tag.get("class") or []
+    return any(c.startswith("list_") for c in classes)
+
+
+@register_scraper("ICPC (International Cable Protection Committee)")
+def _scrape_icpc(source: dict) -> list[dict]:
+    """
+    ICPC publications listing. Each top-level publication is a
+    <DIV CLASS="list_*"> (list_PDF, list_PPTX, list_PPS, list_PPT, list_Book).
+    Top-level <a> links point directly to the PDF asset, so pdf_url == url.
+    Translation children are nested list_* divs and are filtered out.
+    """
+    try:
+        with _http_client() as client:
+            resp = client.get(source["url"])
+            resp.raise_for_status()
+    except Exception as e:
+        print(f"[WARN] Failed to fetch {source['name']}: {e}")
+        return []
+
+    soup = BeautifulSoup(resp.text, "lxml")
+    items: list[dict] = []
+
+    for div in soup.find_all(_icpc_is_list_div):
+        # Skip nested translation entries
+        if any(_icpc_is_list_div(p) for p in div.parents):
+            continue
+
+        link = div.find("a", title=True) or div.find("a")
+        href = link.get("href") if link else None
+        if not href:
+            # E.g. list_Book entries with only an email contact — no asset URL.
+            continue
+
+        title = link.get_text(strip=True)
+        if not title:
+            b = div.find("b")
+            if b:
+                title = b.get_text(strip=True)
+        if not title:
+            continue
+
+        url = urljoin(source["url"], href)
+
+        # Summary: walk the div's direct children, skipping the title <a>,
+        # the <small> file-type/size marker, and any nested list_* divs.
+        parts: list[str] = []
+        for child in div.children:
+            if isinstance(child, NavigableString):
+                text = str(child)
+            elif isinstance(child, Tag):
+                if child.name in ("a", "small"):
+                    continue
+                if _icpc_is_list_div(child):
+                    continue
+                text = child.get_text(" ", strip=True)
+            else:
+                continue
+            if text and text.strip():
+                parts.append(text)
+        summary = re.sub(r"\s+", " ", " ".join(parts)).strip()
+        if len(summary) > 500:
+            summary = summary[:497].rstrip() + "..."
+
+        items.append({
+            "url": url,
+            "title": title,
+            "summary": summary,
+            "published": None,
+            "source": source["name"],
+            "source_type": source["type"],
+            "tags": list(source.get("tags") or []),
+            "category_hint": source.get("category_hint", ""),
+            "pdf_url": url,
+        })
+
     return items
 
 
