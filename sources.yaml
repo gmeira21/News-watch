@@ -114,13 +114,6 @@
   tags: [naval, maritime, shipping, vessels]
   category_hint: news_repost_candidate
 
-- name: Marine Link
-  type: rss
-  url: https://www.marinelink.com/rss/maritime-news.xml
-  tier: 2
-  tags: [maritime, shipping, offshore, technology]
-  category_hint: news_repost_candidate
-
 - name: Offshore Energy
   type: rss
   url: https://www.offshore-energy.biz/feed/
@@ -195,7 +188,7 @@
   category_hint: sourced_post_candidate
 
 - name: RUSI — International Security
-  type: rss
+  type: scrape # Switched from rss on 2026-05-19 — feed returned malformed XML.
   url: https://www.rusi.org/explore-our-research/publications/rss
   tier: 1
   tags: [defense, security, autonomy, naval, undersea]
@@ -264,7 +257,10 @@
 
 - name: Marinha Portuguesa — Notícias
   type: scrape
-  url: https://www.marinha.pt/pt/Media-Centro-de-Noticias/noticias
+  # URL updated 2026-05-19: the previous path
+  # (/pt/Media-Centro-de-Noticias/noticias) was found dead during scraper
+  # development — it 404s and redirects to a SharePoint "page not found".
+  url: https://www.marinha.pt/pt/media-center/Noticias/Paginas/default.aspx
   tier: 2
   tags: [portugal, navy, exercises, repmus]
   category_hint: news_repost_candidate
