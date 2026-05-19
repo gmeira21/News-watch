@@ -158,7 +158,7 @@ def _scrape_marinha_pt(source: dict) -> list[dict]:
             "summary": summary,
             "published": None,
             "source": source["name"],
-            "source_type": "scrape",
+            "source_type": source["type"],
             "tags": list(source.get("tags") or []),
             "category_hint": source.get("category_hint", ""),
         })
