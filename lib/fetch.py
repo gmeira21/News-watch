@@ -12,7 +12,7 @@ always returns a list, never raises.
 import re
 from datetime import date, datetime, timezone
 from typing import Any, Callable
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import feedparser
 import httpx
@@ -243,6 +243,75 @@ def _scrape_icpc(source: dict) -> list[dict]:
             "category_hint": source.get("category_hint", ""),
             "pdf_url": url,
         })
+
+    return items
+
+
+@register_scraper("EEAS — Maritime Security")
+def _scrape_eeas(source: dict) -> list[dict]:
+    """
+    EEAS Maritime Security topic page. The page is Drupal-rendered HTML
+    with two related-content sections — "Related Press" (press-material
+    cards) and "Related Stories" (story cards). Both share the same
+    inner layout:
+        h3.card-title > a               → title + link
+        .card-footer.node__meta         → date as DD.MM.YYYY
+    Links point either to internal EEAS article pages or external press
+    URLs (consilium.europa.eu, etc). PDFs are uncommon here — pdf_url
+    is only set when the href itself is a .pdf.
+    """
+    try:
+        with _http_client() as client:
+            resp = client.get(source["url"])
+            resp.raise_for_status()
+    except Exception as e:
+        print(f"[WARN] Failed to fetch {source['name']}: {e}")
+        return []
+
+    soup = BeautifulSoup(resp.text, "lxml")
+    items: list[dict] = []
+
+    for card in soup.select(
+        "div.card.node--type-press-material, div.card.node--type-story"
+    ):
+        link = card.select_one("h3.card-title a")
+        href = link.get("href") if link else None
+        if not href:
+            continue
+        title = link.get_text(strip=True)
+        if not title:
+            continue
+        url = urljoin(source["url"], href)
+
+        # Date appears as DD.MM.YYYY inside .card-footer.node__meta.
+        # EEAS gives us date only — emit midnight UTC for schema parity
+        # with the RSS handler.
+        published: str | None = None
+        meta = card.select_one(".card-footer.node__meta")
+        if meta:
+            m = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", meta.get_text(" ", strip=True))
+            if m:
+                day, month, year = (int(x) for x in m.groups())
+                try:
+                    published = datetime(
+                        year, month, day, tzinfo=timezone.utc
+                    ).isoformat()
+                except ValueError:
+                    published = None
+
+        item: dict = {
+            "url": url,
+            "title": title,
+            "summary": "",
+            "published": published,
+            "source": source["name"],
+            "source_type": source["type"],
+            "tags": list(source.get("tags") or []),
+            "category_hint": source.get("category_hint", ""),
+        }
+        if urlparse(url).path.lower().endswith(".pdf"):
+            item["pdf_url"] = url
+        items.append(item)
 
     return items
 
