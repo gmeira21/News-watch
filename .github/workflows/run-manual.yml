@@ -1,15 +1,20 @@
-# Runs Mon/Wed/Fri 07:00 UTC (08:00 Lisbon winter / 09:00 Lisbon summer).
-name: Navictus News Watch
+# Manual companion to run.yml: same pipeline, no schedule, with a
+# dry_run toggle exposed in the Actions UI. Use this to trigger a
+# test run without committing changes.
+name: Navictus News Watch (manual)
 
 on:
-  schedule:
-    - cron: "0 7 * * 1,3,5"
-  # Allows manual runs from the Actions UI on top of the schedule.
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (no Telegram send, no store writes)"
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   run-digest:
-    name: Run digest
+    name: Run digest (manual)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -21,11 +26,9 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Each run writes a fresh cache entry (keyed by github.run_id) and
-      # restores from the most recent matching prefix via restore-keys.
-      # This is the standard pattern for incrementally updated state
-      # files: the unique key guarantees a save on every run; the prefix
-      # restore-key picks up the previous run's state.
+      # Shares the same cache key prefix as the scheduled workflow so a
+      # manual run picks up the latest seen.db. Dry runs don't mutate
+      # seen.db, so re-saving it under a fresh run_id is a no-op.
       - name: Cache seen.db
         uses: actions/cache@v4
         with:
@@ -42,4 +45,9 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python run.py
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            python run.py --dry-run
+          else
+            python run.py
+          fi
