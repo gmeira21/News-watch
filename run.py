@@ -8,8 +8,10 @@ filtering rules, formatting, scraping all live in the lib modules.
 """
 
 import argparse
+import os
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 
@@ -20,6 +22,29 @@ from lib import filter as filter_mod
 from lib import store as store_mod
 
 MAX_MANUAL_CHECKS_IN_DIGEST = 3
+
+
+def _passes_recency(item: dict, max_age: timedelta, now: datetime) -> bool:
+    """
+    Fail-open recency check. Items with no parseable `published` field
+    always pass — the store's URL dedup keeps them from recurring, and
+    we'd rather include a possibly-stale undated item than silently
+    drop one due to a date-format quirk.
+    """
+    published = item.get("published")
+    if not published:
+        return True
+    try:
+        dt = datetime.fromisoformat(published)
+    except (TypeError, ValueError):
+        print(
+            f"[RUN] recency: unparseable published={published!r} "
+            f"for {item.get('url')!r}; including"
+        )
+        return True
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt >= now - max_age
 
 
 def _full_pipeline(limit: int | None, dry_run: bool, send_empty: bool) -> int:
@@ -35,11 +60,33 @@ def _full_pipeline(limit: int | None, dry_run: bool, send_empty: bool) -> int:
     already_seen = len(items) - len(new_items)
     print(f"[RUN] {len(new_items)} new items ({already_seen} already seen, skipping)")
 
-    if limit is not None and limit < len(new_items):
-        print(f"[RUN] --limit {limit}: truncating from {len(new_items)} to {limit}")
-        new_items = new_items[:limit]
+    # Recency gate: drop items older than DIGEST_MAX_AGE_DAYS (default 30)
+    # so we don't burn Haiku tokens judging stale items.
+    raw_max_age = os.environ.get("DIGEST_MAX_AGE_DAYS")
+    try:
+        max_age_days = int(raw_max_age) if raw_max_age is not None else None
+        if max_age_days is None or max_age_days <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        print("[RUN] DIGEST_MAX_AGE_DAYS not set or invalid, using default 30")
+        max_age_days = 30
+    max_age = timedelta(days=max_age_days)
+    now_utc = datetime.now(timezone.utc)
+    fresh_items = [i for i in new_items if _passes_recency(i, max_age, now_utc)]
+    stale_dropped = len(new_items) - len(fresh_items)
+    cutoff_date = (now_utc - max_age).strftime("%Y-%m-%d")
+    print(
+        f"[RUN] {len(fresh_items)} items pass recency gate "
+        f"({stale_dropped} dropped as stale, cutoff={cutoff_date})"
+    )
 
-    if not new_items:
+    if limit is not None and limit < len(fresh_items):
+        print(
+            f"[RUN] --limit {limit}: truncating from {len(fresh_items)} to {limit}"
+        )
+        fresh_items = fresh_items[:limit]
+
+    if not fresh_items:
         print("[RUN] No new items to process")
         delivered = 0
         delivery_failed = False
@@ -57,8 +104,8 @@ def _full_pipeline(limit: int | None, dry_run: bool, send_empty: bool) -> int:
         )
         return 1 if delivery_failed else 0
 
-    judgments = filter_mod.judge_batch(new_items)
-    enriched_judgments = enrich_mod.enrich_batch(new_items, judgments)
+    judgments = filter_mod.judge_batch(fresh_items)
+    enriched_judgments = enrich_mod.enrich_batch(fresh_items, judgments)
 
     # Deliverables = high-relevance verdicts, plus up to N manual-check
     # reminders. Manual-checks bypass the verdict gate because the
@@ -67,14 +114,14 @@ def _full_pipeline(limit: int | None, dry_run: bool, send_empty: bool) -> int:
     deliverable_judgments: list[dict] = []
     seen_urls: set[str] = set()
 
-    for item, judgment in zip(new_items, enriched_judgments):
+    for item, judgment in zip(fresh_items, enriched_judgments):
         if judgment.get("verdict") in ("news_repost", "sourced_post"):
             deliverable_items.append(item)
             deliverable_judgments.append(judgment)
             seen_urls.add(item["url"])
 
     manual_added = 0
-    for item, judgment in zip(new_items, enriched_judgments):
+    for item, judgment in zip(fresh_items, enriched_judgments):
         if item.get("source_type") != "manual_check":
             continue
         if item["url"] in seen_urls:
@@ -95,11 +142,11 @@ def _full_pipeline(limit: int | None, dry_run: bool, send_empty: bool) -> int:
         print(msg)
         print(
             f"\n[RUN] --dry-run: NOT sending to Telegram; "
-            f"would have stored {len(new_items)} judgments"
+            f"would have stored {len(fresh_items)} judgments"
         )
         elapsed = time.perf_counter() - started
         print(
-            f"[RUN] Done. fetched={len(items)} new={len(new_items)} "
+            f"[RUN] Done. fetched={len(items)} new={len(fresh_items)} "
             f"delivered=0 duration={elapsed:.1f}s"
         )
         return 0
@@ -128,7 +175,7 @@ def _full_pipeline(limit: int | None, dry_run: bool, send_empty: bool) -> int:
         )
 
     if not delivery_failed:
-        for item, judgment in zip(new_items, enriched_judgments):
+        for item, judgment in zip(fresh_items, enriched_judgments):
             store_mod.mark_seen(
                 url=item["url"],
                 source=item["source"],
@@ -136,11 +183,11 @@ def _full_pipeline(limit: int | None, dry_run: bool, send_empty: bool) -> int:
                 verdict=judgment["verdict"],
                 relevance=judgment.get("relevance"),
             )
-        print(f"[RUN] Stored {len(new_items)} judgments to seen.db")
+        print(f"[RUN] Stored {len(fresh_items)} judgments to seen.db")
 
     elapsed = time.perf_counter() - started
     print(
-        f"[RUN] Done. fetched={len(items)} new={len(new_items)} "
+        f"[RUN] Done. fetched={len(items)} new={len(fresh_items)} "
         f"delivered={delivered} duration={elapsed:.1f}s"
     )
     return 1 if delivery_failed else 0
